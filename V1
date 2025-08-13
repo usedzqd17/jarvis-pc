@@ -1,0 +1,113 @@
+# permet de choisir le son de tout le pc avec des commande 
+# doit etre dans un envirenoment venv : venv\Scripts\activate
+
+
+import speech_recognition as sr
+import pyttsx3
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+from ctypes import cast, POINTER
+from comtypes import CLSCTX_ALL
+import re
+import subprocess
+
+# Initialisation du moteur de synthèse vocale
+engine = pyttsx3.init()
+engine.setProperty('rate', 150)
+
+def speak(text):
+    print(f"Jarvis: {text}")
+    engine.say(text)
+    engine.runAndWait()
+
+def listen():
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("🎤 En écoute... Dites une commande.")
+        recognizer.adjust_for_ambient_noise(source)
+        audio = recognizer.listen(source)
+
+    try:
+        text = recognizer.recognize_google(audio, language='fr-FR')
+        print(f"Vous avez dit : {text}")
+        return text.lower()
+    except sr.UnknownValueError:
+        speak("Désolé, je n'ai pas compris.")
+        return ""
+    except sr.RequestError:
+        speak("Erreur de connexion avec le service de reconnaissance vocale.")
+        return ""
+
+def get_volume_control():
+    devices = AudioUtilities.GetSpeakers()
+    interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    return cast(interface, POINTER(IAudioEndpointVolume))
+
+def augmenter_volume(pas=0.1):
+    volume = get_volume_control()
+    current = volume.GetMasterVolumeLevelScalar()
+    nouveau = min(current + pas, 1.0)
+    volume.SetMasterVolumeLevelScalar(nouveau, None)
+    print(f"🔊 Volume augmenté à {int(nouveau * 100)}%")
+
+def baisser_volume(pas=0.1):
+    volume = get_volume_control()
+    current = volume.GetMasterVolumeLevelScalar()
+    nouveau = max(current - pas, 0.0)
+    volume.SetMasterVolumeLevelScalar(nouveau, None)
+    print(f"🔉 Volume baissé à {int(nouveau * 100)}%")
+
+def definir_volume(pourcentage):
+    volume = get_volume_control()
+    valeur = max(0.0, min(pourcentage / 100.0, 1.0))
+    volume.SetMasterVolumeLevelScalar(valeur, None)
+    print(f"🎚️ Volume défini à {int(valeur * 100)}%")
+
+def extraire_pourcentage(cmd):
+    match = re.search(r"(\d+)\s*%?", cmd)
+    if match:
+        return int(match.group(1))
+    return None
+
+def main():
+    speak("Bonjour, je suis Jarvis. Dites 'Garmin' suivi d'une commande.")
+    while True:
+        command = listen()
+        if command:
+            if command.startswith("garmin"):
+                instruction = command.replace("garmin", "").strip()
+
+                if "monte le son" in instruction or "augmente le volume" in instruction:
+                    augmenter_volume()
+                    speak("J'ai augmenté le volume.")
+
+                elif "activer duel" in instruction:
+                    try:
+                        subprocess.Popen(["firefox.exe"])
+                        speak("Jett activée.")
+                    except Exception as e:
+                        speak(f"Erreur lors du lancement : {e}")
+                        
+                   #
+                    
+                elif "baisse le son" in instruction or "diminue le volume" in instruction:
+                    baisser_volume()
+                    speak("J'ai baissé le volume.")
+                elif "volume à" in instruction or "mets le volume à" in instruction:
+                    pourcentage = extraire_pourcentage(instruction)
+                    if pourcentage is not None:
+                        definir_volume(pourcentage)
+                        speak(f"Volume défini à {pourcentage}%.")
+                    else:
+                        speak("Je n'ai pas compris le pourcentage.")
+                elif any(word in instruction for word in ["stop", "au revoir", "arrête", "quitte"]):
+                    speak("À bientôt !")
+                    break
+                else:
+                    speak("Commande non reconnue après 'Garmin'.")
+            else:
+                speak("Dites 'Garmin' avant la commande.")
+
+if __name__ == "__main__":
+    main()
+
+
